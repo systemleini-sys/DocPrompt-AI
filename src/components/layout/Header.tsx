@@ -6,8 +6,8 @@ import Link from "next/link";
 
 const navItems = [
   { label: "首页", href: "/" },
-  { label: "AI 改写", href: "/rewrite" },
-  { label: "格式转换", href: "/convert" },
+  { label: "AI 改写", href: "/ai-rewrite" },
+  { label: "格式转换", href: "/file-convert" },
   { label: "OCR", href: "/ocr" },
   { label: "定价", href: "/pricing" },
 ];
