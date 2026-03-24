@@ -63,6 +63,10 @@ export default function AddWatermarkPage() {
 
       <main className="pt-20 pb-12 px-4 lg:px-6">
         <div className="max-w-3xl mx-auto">
+          <div className="mb-6 p-4 rounded-card bg-amber-50 border border-amber-200 text-amber-800">
+            <p className="font-medium">🚧 功能建设中</p>
+            <p className="text-sm mt-1">该功能正在开发中，敬请期待。</p>
+          </div>
           <div className="py-8 md:py-12 text-center">
             <h1 className="text-2xl md:text-3xl font-bold text-[#111]">
               自定义加水印

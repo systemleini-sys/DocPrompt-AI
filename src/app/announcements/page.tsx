@@ -48,6 +48,10 @@ export default function AnnouncementsPage() {
       <Header />
       <main className="min-h-screen bg-[#F7F7F7]">
         <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="mb-6 p-4 rounded-card bg-amber-50 border border-amber-200 text-amber-800">
+            <p className="font-medium">🚧 功能建设中</p>
+            <p className="text-sm mt-1">该功能正在开发中，敬请期待。</p>
+          </div>
           <div className="flex items-center gap-2 mb-6">
             <Megaphone className="w-5 h-5 text-[#165DFF]" />
             <h1 className="text-xl font-semibold text-[#111]">公告中心</h1>

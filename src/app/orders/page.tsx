@@ -41,6 +41,10 @@ export default function OrdersPage() {
       <Header />
       <main className="min-h-screen bg-[#F7F7F7]">
         <div className="max-w-4xl mx-auto px-4 py-8">
+          <div className="mb-6 p-4 rounded-card bg-amber-50 border border-amber-200 text-amber-800">
+            <p className="font-medium">🚧 功能建设中</p>
+            <p className="text-sm mt-1">该功能正在开发中，敬请期待。</p>
+          </div>
           <h1 className="text-xl font-semibold text-[#111] mb-6">订单记录</h1>
 
           {/* Filters */}

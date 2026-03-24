@@ -43,6 +43,10 @@ export default function SharesPage() {
       <Header />
       <main className="min-h-screen bg-[#F7F7F7]">
         <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="mb-6 p-4 rounded-card bg-amber-50 border border-amber-200 text-amber-800">
+            <p className="font-medium">🚧 功能建设中</p>
+            <p className="text-sm mt-1">该功能正在开发中，敬请期待。</p>
+          </div>
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-xl font-semibold text-[#111]">分享管理</h1>
             <Button size="sm" onClick={() => setShowCreateModal(true)}>

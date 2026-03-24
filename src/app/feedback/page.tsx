@@ -55,6 +55,10 @@ export default function FeedbackPage() {
       <Header />
       <main className="min-h-screen bg-[#F7F7F7]">
         <div className="max-w-lg mx-auto px-4 py-8">
+          <div className="mb-6 p-4 rounded-card bg-amber-50 border border-amber-200 text-amber-800">
+            <p className="font-medium">🚧 功能建设中</p>
+            <p className="text-sm mt-1">该功能正在开发中，敬请期待。</p>
+          </div>
           <Card>
             <div className="text-center mb-6">
               <div className="w-12 h-12 rounded-2xl bg-[#165DFF]/10 flex items-center justify-center mx-auto mb-4">
