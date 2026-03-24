@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { randomUUID } from "crypto";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,17 +21,26 @@ export async function POST(request: NextRequest) {
     let userId: string;
     if (existingUser) {
       userId = existingUser.id;
-      await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", userId);
+      const now = new Date().toISOString();
+      await supabase.from("users").update({ last_login_at: now, updated_at: now }).eq("id", userId);
     } else {
-      userId = crypto.randomUUID();
+      userId = randomUUID();
       const now = new Date().toISOString();
       await supabase.from("users").insert({
-        id: userId, email: payload.email, name: payload.name, avatar_url: payload.picture,
-        license_type: "free", auth_provider: "google",
-        created_at: now, updated_at: now, last_login_at: now,
+        id: userId,
+        email: payload.email,
+        nickname: payload.name,
+        avatar: payload.picture,
+        role: 0,
+        membership_level: 0,
+        status: 1,
+        google_id: payload.sub,
+        created_at: now,
+        updated_at: now,
+        last_login_at: now,
       });
       await supabase.from("user_limits").insert({
-        user_id: userId, ai_used: 0, ocr_used: 0, watermark_used: 0, pdf_used: 0,
+        user_id: userId,
         date: now.split("T")[0],
       });
     }
