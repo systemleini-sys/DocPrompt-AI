@@ -1,9 +1,8 @@
-export const dynamic = 'force-dynamic';
-
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { uploadFile, generateFileKey } from "@/lib/supabase-storage";
-import { UPLOAD_LIMITS } from "@/constants";
+import { TASK_LIMITS } from "@/constants";
+
+const BUCKET_NAME = 'docprompt-files';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,42 +11,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "请先登录", code: 401 }, { status: 401 });
     }
 
-    const { data: authData } = await supabase.auth.getUser(token);
-    if (!authData.user) {
-      return NextResponse.json({ success: false, error: "登录已过期，请重新登录", code: 401 }, { status: 401 });
-    }
-
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const file = formData.get("file") as File;
 
     if (!file) {
-      return NextResponse.json({ success: false, error: "请选择要上传的文件", code: 400 }, { status: 400 });
+      return NextResponse.json({ success: false, error: "未选择文件", code: 400 }, { status: 400 });
     }
 
-    if (!UPLOAD_LIMITS.allowed_mime_types.includes(file.type as typeof UPLOAD_LIMITS.allowed_mime_types[number])) {
-      return NextResponse.json({ success: false, error: `不支持的文件类型: ${file.type}`, code: 400 }, { status: 400 });
-    }
-
-    const maxSize = UPLOAD_LIMITS.max_file_size_mb * 1024 * 1024;
+    // Check file size
+    const maxSize = TASK_LIMITS.max_file_size_mb * 1024 * 1024;
     if (file.size > maxSize) {
-      return NextResponse.json({ success: false, error: `文件大小超过限制（最大${UPLOAD_LIMITS.max_file_size_mb}MB）`, code: 400 }, { status: 400 });
+      return NextResponse.json({
+        success: false,
+        error: `文件大小超过限制，最大支持 ${TASK_LIMITS.max_file_size_mb}MB`,
+        code: 400,
+      }, { status: 400 });
     }
 
-    const fileKey = generateFileKey(authData.user.id, file.name);
-    const fileUrl = await uploadFile(file, fileKey);
+    // Generate file path
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    const ext = file.name.split('.').pop()?.toLowerCase() || "unknown";
+    const filePath = `upload/${timestamp}_${random}.${ext}`;
 
-    const result = {
-      file_id: crypto.randomUUID(),
-      filename: file.name,
-      url: fileUrl,
-      size: file.size,
-      mime_type: file.type,
-      file_key: fileKey,
-    };
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: true,
+      });
 
-    return NextResponse.json({ success: true, data: result });
+    if (uploadError) {
+      throw new Error(`上传失败: ${uploadError.message}`);
+    }
+
+    const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(uploadData!.path);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        url: urlData.publicUrl,
+        filename: file.name,
+        size: file.size,
+        mime_type: file.type,
+      }
+    });
+
   } catch (error) {
     console.error("[UPLOAD ERROR]", error);
-    return NextResponse.json({ success: false, error: "文件上传失败", code: 500 }, { status: 500 });
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : "上传失败",
+      code: 500,
+    }, { status: 500 });
   }
 }

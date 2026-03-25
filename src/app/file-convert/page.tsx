@@ -1,16 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  FileDown,
-  FileUp,
-  Merge,
-  Scissors,
-  Minimize2,
-  Download,
-  RotateCcw,
-  Crown,
-} from "lucide-react";
+import { Download, RotateCcw, Loader2, FileText, ArrowRight } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import Card from "@/components/ui/Card";
@@ -19,94 +10,99 @@ import Badge from "@/components/ui/Badge";
 import FileUpload from "@/components/ui/FileUpload";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { cn } from "@/lib/utils";
+import { SUPPORTED_FORMATS } from "@/constants";
 
-type ConvertType =
-  | "pdf-to-word"
-  | "word-to-pdf"
-  | "merge-pdf"
-  | "split-pdf"
-  | "compress-pdf";
-
-type Phase = "select" | "upload" | "processing" | "done";
-
-const convertTypes: {
-  key: ConvertType;
-  icon: React.ElementType;
-  label: string;
-  desc: string;
-  accept: string;
-  pro?: boolean;
-}[] = [
-  {
-    key: "pdf-to-word",
-    icon: FileDown,
-    label: "PDF → Word",
-    desc: "将 PDF 转换为可编辑的 Word 文档",
-    accept: ".pdf",
-  },
-  {
-    key: "word-to-pdf",
-    icon: FileUp,
-    label: "Word → PDF",
-    desc: "将 Word 文档转换为 PDF 格式",
-    accept: ".docx,.doc",
-  },
-  {
-    key: "merge-pdf",
-    icon: Merge,
-    label: "合并 PDF",
-    desc: "将多个 PDF 文件合并为一个",
-    accept: ".pdf",
-  },
-  {
-    key: "split-pdf",
-    icon: Scissors,
-    label: "拆分 PDF",
-    desc: "按页码范围拆分 PDF 文件",
-    accept: ".pdf",
-  },
-  {
-    key: "compress-pdf",
-    icon: Minimize2,
-    label: "压缩 PDF",
-    desc: "减小 PDF 文件体积",
-    accept: ".pdf",
-  },
-];
+const targetFormats = [
+  { key: "pdf", label: "PDF", icon: FileText },
+  { key: "docx", label: "Word (DOCX)", icon: FileText },
+  { key: "pptx", label: "PowerPoint (PPTX)", icon: FileText },
+  { key: "xlsx", label: "Excel (XLSX)", icon: FileText },
+  { key: "png", label: "PNG", icon: FileText },
+  { key: "jpg", label: "JPG", icon: FileText },
+  { key: "webp", label: "WebP", icon: FileText },
+] as const;
 
 export default function FileConvertPage() {
-  const [phase, setPhase] = useState<Phase>("select");
-  const [convertType, setConvertType] = useState<ConvertType | null>(null);
+  const [phase, setPhase] = useState<"upload" | "processing" | "done">("upload");
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState("");
+  const [taskId, setTaskId] = useState("");
+  const [outputUrl, setOutputUrl] = useState("");
+  const [targetFormat, setTargetFormat] = useState("pdf");
 
-  const selected = convertTypes.find((c) => c.key === convertType);
+  const handleProcess = async () => {
+    if (!fileName) return;
 
-  const handleSelect = (key: ConvertType) => {
-    setConvertType(key);
-    setPhase("upload");
-  };
-
-  const simulateConvert = () => {
     setPhase("processing");
     setProgress(0);
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
+    setTaskId("");
+    setOutputUrl("");
+
+    try {
+      const response = await fetch("/api/tasks/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "file_convert",
+          fileUrl: "/api/upload",
+          toFormat: targetFormat,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        alert(result.error || "处理失败");
+        setPhase("upload");
+        return;
+      }
+
+      setTaskId(result.data.taskId);
+      await pollTask(result.data.taskId);
+    } catch (error) {
+      alert("网络错误，请重试");
+      setPhase("upload");
+    }
+  };
+
+  const pollTask = async (id: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/tasks/status?id=${id}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          clearInterval(interval);
+          setPhase("upload");
+          alert(data.error || "查询任务失败");
+          return;
+        }
+
+        setProgress(data.data.progress || 0);
+
+        if (data.data.status === "completed") {
           clearInterval(interval);
           setPhase("done");
-          return 100;
+          if (data.data.outputFiles?.[0]?.url) {
+            setOutputUrl(data.data.outputFiles[0].url);
+          }
+        } else if (data.data.status === "failed") {
+          clearInterval(interval);
+          setPhase("upload");
+          alert(data.data.errorMessage || "处理失败");
         }
-        return p + Math.random() * 20 + 5;
-      });
-    }, 250);
+      } catch {
+        clearInterval(interval);
+        setPhase("upload");
+      }
+    }, 1000);
   };
 
   const handleReset = () => {
-    setPhase("select");
-    setConvertType(null);
+    setPhase("upload");
     setProgress(0);
     setFileName("");
+    setOutputUrl("");
   };
 
   return (
@@ -120,78 +116,60 @@ export default function FileConvertPage() {
               文件格式转换
             </h1>
             <p className="mt-2 text-[#666] text-sm md:text-base">
-              支持多种格式互转，快速、精准、保持原有排版
+              支持多种文档和图片格式互转
             </p>
           </div>
 
           <Card padding="lg">
-            {/* Select type */}
-            {phase === "select" && (
-              <div className="space-y-3">
-                {convertTypes.map((c) => (
-                  <button
-                    key={c.key}
-                    onClick={() => handleSelect(c.key)}
-                    className={cn(
-                      "w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left cursor-pointer",
-                      "border-[#E5E5E5] hover:border-[#165DFF] hover:bg-blue-50/30"
-                    )}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                      <c.icon className="w-5 h-5 text-[#165DFF]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-[#111]">
-                          {c.label}
-                        </p>
-                        {c.pro && (
-                          <Badge variant="warning">
-                            <Crown className="w-3 h-3 mr-0.5" />
-                            Pro
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-[#666] mt-0.5">{c.desc}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
             {/* Upload */}
-            {phase === "upload" && selected && (
+            {phase === "upload" && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                      <selected.icon className="w-4 h-4 text-[#165DFF]" />
-                    </div>
-                    <p className="text-sm font-medium text-[#111]">
-                      {selected.label}
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleReset}
-                    className="text-sm text-[#666] hover:text-[#111] cursor-pointer"
-                  >
-                    返回
-                  </button>
+                <div>
+                  <FileUpload
+                    accept=".pdf,.docx,.doc,.pptx,.xlsx,.png,.jpg,.jpeg,.webp"
+                    hint="支持 PDF、Word、Excel、PPT、图片等格式"
+                    onFileSelect={(f) => {
+                      setFileName(f.name);
+                    }}
+                  />
                 </div>
 
-                <FileUpload
-                  accept={selected.accept}
-                  hint={`请上传 ${selected.accept.replace(/\./g, "").toUpperCase()} 格式文件`}
-                  onFileSelect={(f) => {
-                    setFileName(f.name);
-                  }}
-                />
+                <div>
+                  <label className="text-sm font-medium text-[#333] block mb-2">
+                    转换为目标格式
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {targetFormats.map((fmt) => {
+                      const Icon = fmt.icon;
+                      return (
+                        <button
+                          key={fmt.key}
+                          onClick={() => setTargetFormat(fmt.key)}
+                          className={cn(
+                            "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all cursor-pointer",
+                            targetFormat === fmt.key
+                              ? "border-[#165DFF] bg-blue-50"
+                              : "border-[#E5E5E5] hover:border-[#999]"
+                          )}
+                        >
+                          <Icon className="w-6 h-6" />
+                          <span className="text-sm">{fmt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                {fileName && (
-                  <Button fullWidth size="lg" onClick={simulateConvert}>
-                    开始转换
-                  </Button>
-                )}
+                <Button
+                  fullWidth
+                  size="lg"
+                  onClick={handleProcess}
+                  disabled={!fileName}
+                  className="mt-4"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  开始转换
+                </Button>
               </div>
             )}
 
@@ -200,10 +178,10 @@ export default function FileConvertPage() {
               <div className="space-y-4 py-4">
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto animate-pulse">
-                    <FileDown className="w-6 h-6 text-[#165DFF]" />
+                    <Loader2 className="w-6 h-6 text-[#165DFF] animate-spin" />
                   </div>
                   <p className="mt-3 text-sm font-medium text-[#111]">
-                    正在转换文件...
+                    正在转换...
                   </p>
                 </div>
                 <ProgressBar value={progress} status="processing" />
@@ -212,18 +190,26 @@ export default function FileConvertPage() {
 
             {/* Done */}
             {phase === "done" && (
-              <div className="space-y-6 py-2">
+              <div className="space-y-6">
                 <div className="text-center">
                   <Badge variant="success">转换完成</Badge>
-                  <p className="mt-2 text-sm text-[#111]">
-                    {fileName || "文件"} 已成功转换
-                  </p>
                 </div>
+                {outputUrl && (
+                  <div className="aspect-video bg-blue-50/50 rounded-xl border border-blue-100 overflow-hidden">
+                    <div className="w-full h-full flex items-center justify-center">
+                      <p className="text-sm text-[#666]">
+                        文件已转换完成，可下载
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-3">
-                  <Button fullWidth size="lg">
-                    <Download className="w-4 h-4" />
-                    下载文件
-                  </Button>
+                  {outputUrl && (
+                    <Button fullWidth size="lg" onClick={() => window.open(outputUrl, '_blank')}>
+                      <Download className="w-4 h-4" />
+                      下载文件
+                    </Button>
+                  )}
                   <Button variant="outline" size="lg" onClick={handleReset}>
                     <RotateCcw className="w-4 h-4" />
                     继续转换

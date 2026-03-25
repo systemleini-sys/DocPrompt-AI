@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Stamp, Download, RotateCcw, Type, Image as ImageIcon } from "lucide-react";
+import { Stamp, Download, RotateCcw, Type, Image as ImageIcon, Loader2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import Card from "@/components/ui/Card";
@@ -10,6 +10,7 @@ import Badge from "@/components/ui/Badge";
 import FileUpload from "@/components/ui/FileUpload";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 type WmType = "text" | "image";
 type Phase = "upload" | "settings" | "preview" | "processing" | "done";
@@ -28,6 +29,8 @@ export default function AddWatermarkPage() {
   const [wmType, setWmType] = useState<WmType>("text");
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState("");
+  const [taskId, setTaskId] = useState("");
+  const [outputUrl, setOutputUrl] = useState("");
 
   // Text watermark settings
   const [wmText, setWmText] = useState("DocPrompt AI");
@@ -36,19 +39,69 @@ export default function AddWatermarkPage() {
   const [opacity, setOpacity] = useState(30);
   const [position, setPosition] = useState("bottom-right");
 
-  const simulateProcess = () => {
+  const handleProcess = async () => {
     setPhase("processing");
     setProgress(0);
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
+    setTaskId("");
+    setOutputUrl("");
+
+    try {
+      const response = await fetch("/api/tasks/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "add_watermark",
+          fileUrl: "/api/upload",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        alert(result.error || "处理失败");
+        setPhase("upload");
+        return;
+      }
+
+      setTaskId(result.data.taskId);
+      await pollTask(result.data.taskId);
+    } catch (error) {
+      alert("网络错误，请重试");
+      setPhase("upload");
+    }
+  };
+
+  const pollTask = async (id: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/tasks/status?id=${id}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          clearInterval(interval);
+          setPhase("upload");
+          alert(data.error || "查询任务失败");
+          return;
+        }
+
+        setProgress(data.data.progress || 0);
+
+        if (data.data.status === "completed") {
           clearInterval(interval);
           setPhase("done");
-          return 100;
+          if (data.data.outputFiles?.[0]?.url) {
+            setOutputUrl(data.data.outputFiles[0].url);
+          }
+        } else if (data.data.status === "failed") {
+          clearInterval(interval);
+          setPhase("upload");
+          alert(data.data.errorMessage || "处理失败");
         }
-        return p + Math.random() * 20 + 8;
-      });
-    }, 200);
+      } catch {
+        clearInterval(interval);
+        setPhase("upload");
+      }
+    }, 1000);
   };
 
   const handleReset = () => {
@@ -244,7 +297,7 @@ export default function AddWatermarkPage() {
                   </div>
                 </div>
 
-                <Button fullWidth size="lg" onClick={simulateProcess}>
+                <Button fullWidth size="lg" onClick={handleProcess}>
                   <Stamp className="w-4 h-4" />
                   添加水印
                 </Button>
@@ -256,7 +309,7 @@ export default function AddWatermarkPage() {
               <div className="space-y-4 py-4">
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto animate-pulse">
-                    <Stamp className="w-6 h-6 text-[#165DFF]" />
+                    <Loader2 className="w-6 h-6 text-[#165DFF] animate-spin" />
                   </div>
                   <p className="mt-3 text-sm font-medium text-[#111]">
                     正在添加水印...
@@ -272,23 +325,22 @@ export default function AddWatermarkPage() {
                 <div className="text-center">
                   <Badge variant="success">水印添加完成</Badge>
                 </div>
-                <div className="aspect-video bg-blue-50/50 rounded-xl border border-blue-100 flex items-center justify-center">
-                  <div
-                    className="text-lg font-medium select-none"
-                    style={{
-                      color: wmColor,
-                      opacity: opacity / 100,
-                      fontSize: `${Math.min(fontSize, 48)}px`,
-                    }}
-                  >
-                    {wmType === "text" ? wmText : "水印预览"}
+                {outputUrl && (
+                  <div className="relative aspect-video bg-blue-50/50 rounded-xl border border-blue-100 overflow-hidden">
+                    <img
+                      src={outputUrl}
+                      alt="水印预览"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
-                </div>
+                )}
                 <div className="flex gap-3">
-                  <Button fullWidth size="lg">
-                    <Download className="w-4 h-4" />
-                    下载图片
-                  </Button>
+                  {outputUrl && (
+                    <Button fullWidth size="lg" onClick={() => window.open(outputUrl, '_blank')}>
+                      <Download className="w-4 h-4" />
+                      下载图片
+                    </Button>
+                  )}
                   <Button variant="outline" size="lg" onClick={handleReset}>
                     <RotateCcw className="w-4 h-4" />
                     继续处理
